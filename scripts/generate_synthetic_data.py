@@ -1,24 +1,27 @@
-"""Synthetic retail-style events for medallion lab (no real GCP data)."""
-import pandas as pd
 from pathlib import Path
-
+import numpy as np, pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
-DATA.mkdir(parents=True, exist_ok=True)
-
-events = pd.DataFrame({
-    "event_id": [f"E{i:04d}" for i in range(1, 121)],
-    "user_id": [f"U{(i % 30) + 1:03d}" for i in range(1, 121)],
-    "event_type": ["click", "purchase", "view", "add_cart"] * 30,
-    "amount_usd": [round((i % 17) * 3.25, 2) for i in range(1, 121)],
-    "event_ts": pd.date_range("2025-01-01", periods=120, freq="6h"),
-})
-events.to_csv(DATA / "raw_events.csv", index=False)
-
-users = pd.DataFrame({
-    "user_id": [f"U{i:03d}" for i in range(1, 31)],
-    "country": ["US", "CA", "UK", "DE", "IN"] * 6,
-    "segment": ["consumer", "pro", "enterprise"] * 10,
-})
-users.to_csv(DATA / "dim_users.csv", index=False)
-print("Wrote raw_events.csv and dim_users.csv")
+DATA = ROOT / "data"; DATA.mkdir(parents=True, exist_ok=True)
+RNG = np.random.default_rng(428650)
+rows = []
+for d in pd.date_range("2024-08-01", "2024-08-31", freq="D"):
+    n = 12400 if d.strftime("%Y-%m-%d") == "2024-08-21" else int(RNG.integers(11000, 13000))
+    for i in range(n):
+        rows.append({
+            "event_date": d.strftime("%Y-%m-%d"),
+            "subscription_id": f"SUB{(i % 15000):05d}",
+            "status": "ACTIVE" if RNG.random() > 0.05 else "CHURNED",
+            "mrr": round(float(RNG.uniform(9, 80)), 2),
+            "bytes_est": 800,  # synthetic per-row byte weight
+        })
+df = pd.DataFrame(rows)
+day = df[(df.event_date == "2024-08-21") & (df.status == "ACTIVE")].copy()
+factor = 428650 / day.mrr.sum()
+# scale only active that day inside full frame
+mask = (df.event_date == "2024-08-21") & (df.status == "ACTIVE")
+df.loc[mask, "mrr"] = (df.loc[mask, "mrr"] * factor).round(2)
+drift = round(428650 - df.loc[mask, "mrr"].sum(), 2)
+idx = df.loc[mask].index[-1]
+df.at[idx, "mrr"] = round(df.at[idx, "mrr"] + drift, 2)
+df.to_csv(DATA / "bronze_events.csv", index=False)
+print("bronze", len(df))

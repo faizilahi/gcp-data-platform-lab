@@ -1,9 +1,7 @@
 __pycache__/
-*.py[cod]
 .venv/
-venv/
-.env
-*.duckdb
-*.db
+output/
+*.pyc
 .DS_Store
-.pytest_cache/
+data/*.csv
+data/*.json
